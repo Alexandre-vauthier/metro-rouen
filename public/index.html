@@ -1,0 +1,446 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Métro Rouen</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    body { margin: 0; padding: 0; }
+  </style>
+</head>
+<body>
+  <div id="root"></div>
+  
+  <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+  <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+  
+  <script type="text/babel">
+    const { useState, useEffect } = React;
+
+    // Stations du métro de Rouen (structure en Y)
+    // IDs récupérés depuis l'API GTFS-RT
+    const STATIONS = [
+      // === STATIONS COMMUNES (tronc commun) ===
+      { id: "TCAR:BBOU", name: "Boulingrin", branch: "commune" },
+      { id: "TCAR:BEAUV", name: "Beauvoisine", branch: "commune" },
+      { id: "TCAR:GAREV", name: "Gare-Rue Verte", branch: "commune" },
+      { id: "TCAR:JUSTI", name: "Palais de Justice", branch: "commune" },
+      { id: "TCAR:TARTS", name: "Théâtre des Arts", branch: "commune" },
+      { id: "TCAR:JOFFR", name: "Joffre-Mutualité", branch: "commune" },
+      { id: "TCAR:STSEV", name: "Saint-Sever", branch: "commune" },
+      
+      // === BRANCHE GEORGES BRAQUE ===
+      { id: "TCAR:KENNE", name: "Kennedy", branch: "gb" },
+      { id: "TCAR:PROVI", name: "Providence", branch: "gb" },
+      { id: "TCAR:CHGAU", name: "Charles de Gaulle", branch: "gb" },
+      { id: "TCAR:JULIE", name: "14-Juillet", branch: "gb" },
+      { id: "TCAR:08MAI", name: "Place du 8-Mai", branch: "gb" },
+      { id: "TCAR:TRUFF", name: "François Truffaut", branch: "gb" },
+      { id: "TCAR:JAURE", name: "Jean Jaurès", branch: "gb" },
+      { id: "TCAR:AVCAE", name: "Avenue de Caen", branch: "gb" },
+      { id: "TCAR:LBLUM", name: "Léon Blum", branch: "gb" },
+      { id: "TCAR:CEZAN", name: "Paul Cézanne", branch: "gb" },
+      { id: "TCAR:BRAQU", name: "Georges Braque", branch: "gb" },
+      
+      // === BRANCHE TECHNOPÔLE ===
+      { id: "TCAR:RENAN", name: "Ernest Renan", branch: "techno" },
+      { id: "TCAR:EUROP", name: "Europe", branch: "techno" },
+      { id: "TCAR:BALZA", name: "Honoré de Balzac", branch: "techno" },
+      { id: "TCAR:VOLTA", name: "Voltaire", branch: "techno" },
+      { id: "TCAR:GARIB", name: "Garibaldi", branch: "techno" },
+      { id: "TCAR:SOTTE", name: "Sotteville", branch: "techno" },
+      { id: "TCAR:JUILL", name: "14-Juillet", branch: "techno" },
+      { id: "TCAR:JEZAY", name: "Jean Zay", branch: "techno" },
+      { id: "TCAR:FAMIL", name: "Familistère", branch: "techno" },
+      { id: "TCAR:COURS", name: "Cours", branch: "techno" },
+      { id: "TCAR:PARC", name: "Parc Expo", branch: "techno" },
+      { id: "TCAR:BASTI", name: "Maryse Bastié", branch: "techno" },
+      { id: "TCAR:UNIV2", name: "Technopôle", branch: "techno" },
+    ];
+
+    // Fonction pour obtenir l'ID GTFS réel avec le suffixe de direction
+    // GB et Techno = direction 0 (vers sud), Boulingrin = direction 1 (vers nord)
+    const getStopId = (baseId, direction) => {
+      if (baseId === "TCAR:BBOU") return baseId;
+      // Pour GB et Techno, suffixe 0. Pour Boulingrin, suffixe 1
+      const suffix = direction === "boulingrin" ? "1" : "0";
+      return `${baseId}${suffix}`;
+    };
+
+    const StationSelector = ({ onSelect }) => {
+      const [selectedValue, setSelectedValue] = useState("");
+
+      const handleSubmit = (e) => {
+        e.preventDefault();
+        if (selectedValue) {
+          const [stationId, direction] = selectedValue.split('|');
+          const station = STATIONS.find(s => s.id === stationId);
+          if (station) {
+            const directionName = direction === "gb" ? "Georges Braque" : 
+                                  direction === "techno" ? "Technopôle" : "Boulingrin";
+            onSelect({
+              ...station,
+              direction: direction,
+              directionName: directionName
+            });
+          }
+        }
+      };
+
+      // Stations pour direction Georges Braque (communes + branche GB) - directionId = 0
+      const stationsGB = STATIONS.filter(s => s.branch === "commune" || s.branch === "gb");
+      // Stations pour direction Technopôle (communes + branche Techno) - directionId = 0
+      const stationsTechno = STATIONS.filter(s => s.branch === "commune" || s.branch === "techno");
+      // Stations pour direction Boulingrin (branches uniquement, pas les communes) - directionId = 1
+      const stationsBoulingrin = STATIONS.filter(s => s.branch === "gb" || s.branch === "techno");
+
+      return (
+        <div className="min-h-screen bg-gradient-to-br from-blue-900 via-blue-800 to-blue-900 text-white p-6 flex items-center justify-center">
+          <div className="bg-white/10 backdrop-blur-md rounded-3xl p-8 max-w-md w-full shadow-2xl border border-white/20">
+            <h1 className="text-4xl font-bold mb-6 text-center">🚇 Métro Rouen</h1>
+            <p className="text-blue-200 mb-6 text-center">Choisissez votre station et direction</p>
+            
+            <form onSubmit={handleSubmit}>
+              <select
+                value={selectedValue}
+                onChange={(e) => setSelectedValue(e.target.value)}
+                className="w-full p-4 rounded-xl bg-white/20 border border-white/30 text-white mb-4 text-lg"
+              >
+                <option value="" className="text-gray-800">-- Sélectionnez une station --</option>
+                
+                <optgroup label="🚇 Direction Georges Braque" className="text-gray-800">
+                  {stationsGB.map(station => (
+                    <option key={`${station.id}-gb`} value={`${station.id}|gb`} className="text-gray-800">
+                      {station.name}
+                    </option>
+                  ))}
+                </optgroup>
+                
+                <optgroup label="🚇 Direction Technopôle" className="text-gray-800">
+                  {stationsTechno.map(station => (
+                    <option key={`${station.id}-techno`} value={`${station.id}|techno`} className="text-gray-800">
+                      {station.name}
+                    </option>
+                  ))}
+                </optgroup>
+                
+                <optgroup label="🚇 Direction Boulingrin" className="text-gray-800">
+                  {stationsBoulingrin.map(station => (
+                    <option key={`${station.id}-boulingrin`} value={`${station.id}|boulingrin`} className="text-gray-800">
+                      {station.name}
+                    </option>
+                  ))}
+                </optgroup>
+              </select>
+              
+              <button
+                type="submit"
+                disabled={!selectedValue}
+                className="w-full bg-yellow-400 hover:bg-yellow-500 disabled:bg-gray-600 text-blue-900 font-bold py-4 px-6 rounded-xl transition-all text-lg"
+              >
+                Afficher les horaires
+              </button>
+            </form>
+          </div>
+        </div>
+      );
+    };
+
+    const MetroDisplay = () => {
+      const [nextTrains, setNextTrains] = useState([]);
+      const [lastUpdate, setLastUpdate] = useState(null);
+      const [loading, setLoading] = useState(true);
+      const [error, setError] = useState(null);
+      const [currentTime, setCurrentTime] = useState(new Date());
+      const [showSelector, setShowSelector] = useState(false);
+      const [config, setConfig] = useState(null);
+
+      useEffect(() => {
+        const params = new URLSearchParams(window.location.search);
+        const stationId = params.get('station');
+        const direction = params.get('direction'); // "gb" ou "techno"
+
+        if (stationId && direction) {
+          const station = STATIONS.find(s => s.id === stationId);
+          if (station) {
+            const directionName = direction === "gb" ? "Georges Braque" : 
+                                  direction === "techno" ? "Technopôle" : "Boulingrin";
+            setConfig({
+              stationBaseId: station.id,
+              stationStopId: getStopId(station.id, direction),
+              stationName: station.name,
+              metroRouteId: "TCAR:90",
+              direction: direction,
+              directionName: directionName,
+              refreshInterval: 20000,
+              apiUrl: "/api/metro",
+            });
+          } else {
+            setShowSelector(true);
+          }
+        } else {
+          setShowSelector(true);
+        }
+      }, []);
+
+      const handleStationSelect = (station) => {
+        const url = new URL(window.location);
+        url.searchParams.set('station', station.id);
+        url.searchParams.set('direction', station.direction);
+        window.history.pushState({}, '', url);
+        
+        setConfig({
+          stationBaseId: station.id,
+          stationStopId: getStopId(station.id, station.direction),
+          stationName: station.name,
+          metroRouteId: "TCAR:90",
+          direction: station.direction,
+          directionName: station.directionName,
+          refreshInterval: 20000,
+          apiUrl: "http://localhost:3000/api/metro",
+        });
+        setShowSelector(false);
+      };
+
+      useEffect(() => {
+        const timer = setInterval(() => {
+          setCurrentTime(new Date());
+        }, 1000);
+        return () => clearInterval(timer);
+      }, []);
+
+      const fetchMetroData = async () => {
+        if (!config) return;
+        
+        try {
+          setLoading(true);
+          const response = await fetch(config.apiUrl);
+
+          if (!response.ok) {
+            throw new Error('Erreur de connexion à l\'API');
+          }
+
+          const data = await response.json();
+          const trains = processGTFSData(data);
+
+          setNextTrains(trains);
+          setLastUpdate(new Date());
+          setError(null);
+        } catch (err) {
+          console.error('Erreur:', err);
+          setError(err.message);
+        } finally {
+          setLoading(false);
+        }
+      };
+
+      const processGTFSData = (data) => {
+        const now = Math.floor(Date.now() / 1000);
+        const upcomingTrains = [];
+
+        data.entity?.forEach(entity => {
+          const tripUpdate = entity.tripUpdate;
+          const vehicleLabel = tripUpdate?.vehicle?.label || '';
+
+          // Vérifier la route
+          if (tripUpdate?.trip?.routeId !== config.metroRouteId) return;
+
+          // Vérifier la direction et la destination
+          // Direction 0 = vers sud (GB ou Techno), Direction 1 = vers nord (Boulingrin)
+          const directionId = tripUpdate?.trip?.directionId;
+          
+          let isCorrectDirection = false;
+          if (config.directionName === "Georges Braque") {
+            // Direction 0 + vehicle label "Georges Braque"
+            isCorrectDirection = directionId === 0 && vehicleLabel === "Georges Braque";
+          } else if (config.directionName === "Technopôle") {
+            // Direction 0 + vehicle label "Technopôle"
+            isCorrectDirection = directionId === 0 && vehicleLabel === "Technopôle";
+          } else if (config.directionName === "Boulingrin") {
+            // Direction 1
+            isCorrectDirection = directionId === 1;
+          }
+
+          if (!isCorrectDirection) return;
+
+          tripUpdate.stopTimeUpdate?.forEach(stopTime => {
+            if (stopTime.stopId === config.stationStopId) {
+              const arrivalTime = stopTime.arrival?.time;
+
+              if (arrivalTime && arrivalTime > now) {
+                upcomingTrains.push({
+                  id: entity.id,
+                  arrival: arrivalTime,
+                  direction: config.directionName,
+                  vehicleLabel: vehicleLabel || 'Métro',
+                  delay: stopTime.arrival?.delay || 0,
+                });
+              }
+            }
+          });
+        });
+
+        return upcomingTrains
+          .sort((a, b) => a.arrival - b.arrival)
+          .slice(0, 3);
+      };
+
+      useEffect(() => {
+        if (config) {
+          fetchMetroData();
+          const interval = setInterval(fetchMetroData, config.refreshInterval);
+          return () => clearInterval(interval);
+        }
+      }, [config]);
+
+      const getTimeUntil = (timestamp) => {
+        const now = Math.floor(Date.now() / 1000);
+        const diff = timestamp - now;
+
+        if (diff < 60) return "< 1 min";
+        if (diff < 0) return "Arrivé";
+        const minutes = Math.floor(diff / 60);
+        return `${minutes} min`;
+      };
+
+      const formatTime = (timestamp) => {
+        const date = new Date(timestamp * 1000);
+        return date.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
+      };
+
+      const getDelayText = (delaySeconds) => {
+        if (!delaySeconds || Math.abs(delaySeconds) < 30) return null;
+        const minutes = Math.round(delaySeconds / 60);
+        if (minutes > 0) return `+${minutes} min`;
+        return `${minutes} min`;
+      };
+
+      if (showSelector) {
+        return <StationSelector onSelect={handleStationSelect} />;
+      }
+
+      if (!config) {
+        return (
+          <div className="min-h-screen bg-gradient-to-br from-blue-900 via-blue-800 to-blue-900 text-white p-6 flex items-center justify-center">
+            <div className="text-2xl">Chargement...</div>
+          </div>
+        );
+      }
+
+      return (
+        <div className="min-h-screen bg-gradient-to-br from-blue-900 via-blue-800 to-blue-900 text-white p-6">
+          <div className="max-w-4xl mx-auto">
+            <div className="bg-white/10 backdrop-blur-md rounded-3xl p-8 mb-6 shadow-2xl border border-white/20">
+              <div className="flex items-center justify-between">
+                <div className="flex-1">
+                  <h1 className="text-5xl font-bold mb-2">Métro Rouen</h1>
+                  <div className="flex items-center gap-2 text-blue-200">
+                    <span className="text-xl">{config.stationName}</span>
+                    <span className="mx-2">→</span>
+                    <span className="text-xl">{config.directionName}</span>
+                  </div>
+                </div>
+                <div className="text-right">
+                  <div className="flex items-center gap-2 text-blue-200 mb-1">
+                    <span className="text-sm">Maintenant</span>
+                  </div>
+                  <div className="text-4xl font-bold font-mono">
+                    {currentTime.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
+                  </div>
+                  <button
+                    onClick={() => setShowSelector(true)}
+                    className="mt-2 text-xs text-blue-300 hover:text-white underline"
+                  >
+                    Changer de station
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            {error && (
+              <div className="bg-red-500/20 backdrop-blur-md rounded-2xl p-6 mb-6 border border-red-400/30 flex items-start gap-3">
+                <div>
+                  <p className="text-red-200 font-semibold">Erreur de connexion</p>
+                  <p className="text-sm text-red-300 mt-1">{error}</p>
+                </div>
+              </div>
+            )}
+
+            <div className="space-y-4">
+              {loading && nextTrains.length === 0 ? (
+                <div className="bg-white/10 backdrop-blur-md rounded-2xl p-12 text-center">
+                  <div className="text-xl">Chargement des données...</div>
+                </div>
+              ) : nextTrains.length === 0 ? (
+                <div className="bg-white/10 backdrop-blur-md rounded-2xl p-12 text-center">
+                  <p className="text-3xl mb-2">🚇</p>
+                  <p className="text-2xl">Aucun métro à venir</p>
+                  <p className="text-sm text-blue-300 mt-2">
+                    Prochain passage dans quelques instants
+                  </p>
+                </div>
+              ) : (
+                nextTrains.map((train, index) => (
+                  <div
+                    key={train.id}
+                    className={`bg-white/10 backdrop-blur-md rounded-2xl p-6 shadow-xl border border-white/20 transition-all hover:bg-white/15 ${
+                      index === 0 ? 'ring-2 ring-yellow-400/50' : ''
+                    }`}
+                  >
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-4">
+                        <div className={`w-16 h-16 rounded-full flex items-center justify-center text-2xl font-bold ${
+                          index === 0 ? 'bg-yellow-400 text-blue-900' : 'bg-white/20'
+                        }`}>
+                          {index === 0 ? '⚡' : index + 1}
+                        </div>
+                        <div>
+                          <div className="text-sm text-blue-200 mb-1">
+                            {index === 0 ? 'Prochain métro' : `Métro ${index + 1}`}
+                          </div>
+                          <div className="text-2xl font-semibold">{train.direction}</div>
+                          {train.vehicleLabel && (
+                            <div className="text-xs text-blue-300 mt-1">{train.vehicleLabel}</div>
+                          )}
+                        </div>
+                      </div>
+                      <div className="text-right">
+                        <div className={`text-5xl font-bold font-mono ${
+                          index === 0 ? 'text-yellow-400' : ''
+                        }`}>
+                          {getTimeUntil(train.arrival)}
+                        </div>
+                        <div className="text-sm text-blue-200 mt-1">
+                          Arrivée: {formatTime(train.arrival)}
+                        </div>
+                        {getDelayText(train.delay) && (
+                          <div className={`text-xs mt-1 ${train.delay > 0 ? 'text-orange-300' : 'text-green-300'}`}>
+                            Retard: {getDelayText(train.delay)}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
+
+            <div className="mt-6 text-center text-sm text-blue-300">
+              {lastUpdate && (
+                <p>Dernière mise à jour: {lastUpdate.toLocaleTimeString('fr-FR')}</p>
+              )}
+              <p className="mt-1 text-xs">
+                Rafraîchissement automatique toutes les {config.refreshInterval / 1000} secondes
+              </p>
+            </div>
+          </div>
+        </div>
+      );
+    };
+
+    ReactDOM.render(<MetroDisplay />, document.getElementById('root'));
+  </script>
+</body>
+</html>
