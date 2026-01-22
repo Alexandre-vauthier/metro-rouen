@@ -160,8 +160,9 @@
       useEffect(() => {
         const params = new URLSearchParams(window.location.search);
         const stationId = params.get('station');
-        const direction = params.get('direction'); // "gb" ou "techno"
+        const direction = params.get('direction');
 
+        // 1. Vérifier d'abord les paramètres URL
         if (stationId && direction) {
           const station = STATIONS.find(s => s.id === stationId);
           if (station) {
@@ -177,19 +178,41 @@
               refreshInterval: 20000,
               apiUrl: "/api/metro",
             });
-          } else {
-            setShowSelector(true);
+            return;
           }
-        } else {
-          setShowSelector(true);
         }
+
+        // 2. Sinon vérifier localStorage
+        const savedStation = localStorage.getItem('metro-station');
+        const savedDirection = localStorage.getItem('metro-direction');
+        
+        if (savedStation && savedDirection) {
+          const station = STATIONS.find(s => s.id === savedStation);
+          if (station) {
+            const directionName = savedDirection === "gb" ? "Georges Braque" : 
+                                  savedDirection === "techno" ? "Technopôle" : "Boulingrin";
+            setConfig({
+              stationBaseId: station.id,
+              stationStopId: getStopId(station.id, savedDirection),
+              stationName: station.name,
+              metroRouteId: "TCAR:90",
+              direction: savedDirection,
+              directionName: directionName,
+              refreshInterval: 20000,
+              apiUrl: "/api/metro",
+            });
+            return;
+          }
+        }
+
+        // 3. Sinon afficher le sélecteur
+        setShowSelector(true);
       }, []);
 
       const handleStationSelect = (station) => {
-        const url = new URL(window.location);
-        url.searchParams.set('station', station.id);
-        url.searchParams.set('direction', station.direction);
-        window.history.pushState({}, '', url);
+        // Sauvegarder en localStorage
+        localStorage.setItem('metro-station', station.id);
+        localStorage.setItem('metro-direction', station.direction);
         
         setConfig({
           stationBaseId: station.id,
@@ -330,32 +353,24 @@
       }
 
       return (
-        <div className="min-h-screen bg-gradient-to-br from-blue-900 via-blue-800 to-blue-900 text-white p-6">
+        <div className="min-h-screen bg-gradient-to-br from-blue-900 via-blue-800 to-blue-900 text-white p-4">
           <div className="max-w-4xl mx-auto">
-            <div className="bg-white/10 backdrop-blur-md rounded-3xl p-8 mb-6 shadow-2xl border border-white/20">
-              <div className="flex items-center justify-between">
-                <div className="flex-1">
-                  <h1 className="text-5xl font-bold mb-2">Métro Rouen</h1>
-                  <div className="flex items-center gap-2 text-blue-200">
-                    <span className="text-xl">{config.stationName}</span>
-                    <span className="mx-2">→</span>
-                    <span className="text-xl">{config.directionName}</span>
-                  </div>
+            <div className="bg-white/10 backdrop-blur-md rounded-3xl p-6 mb-4 shadow-2xl border border-white/20">
+              <div className="text-center">
+                <div className="text-5xl font-bold font-mono mb-2">
+                  {currentTime.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
                 </div>
-                <div className="text-right">
-                  <div className="flex items-center gap-2 text-blue-200 mb-1">
-                    <span className="text-sm">Maintenant</span>
-                  </div>
-                  <div className="text-4xl font-bold font-mono">
-                    {currentTime.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
-                  </div>
-                  <button
-                    onClick={() => setShowSelector(true)}
-                    className="mt-2 text-xs text-blue-300 hover:text-white underline"
-                  >
-                    Changer de station
-                  </button>
+                <div className="flex items-center justify-center gap-2 text-blue-200 text-lg">
+                  <span>{config.stationName}</span>
+                  <span>→</span>
+                  <span>{config.directionName}</span>
                 </div>
+                <button
+                  onClick={() => setShowSelector(true)}
+                  className="mt-2 text-xs text-blue-300 hover:text-white underline"
+                >
+                  Changer de station
+                </button>
               </div>
             </div>
 
