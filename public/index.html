@@ -70,79 +70,142 @@
     };
 
     const StationSelector = ({ onSelect }) => {
-      const [selectedValue, setSelectedValue] = useState("");
+      const [selectedDirection, setSelectedDirection] = useState(null);
+      const [favorites, setFavorites] = useState([]);
 
-      const handleSubmit = (e) => {
-        e.preventDefault();
-        if (selectedValue) {
-          const [stationId, direction] = selectedValue.split('|');
-          const station = STATIONS.find(s => s.id === stationId);
-          if (station) {
-            const directionName = direction === "gb" ? "Georges Braque" : 
-                                  direction === "techno" ? "Technopôle" : "Boulingrin";
-            onSelect({
-              ...station,
-              direction: direction,
-              directionName: directionName
-            });
-          }
+      // Charger les favoris au démarrage
+      useEffect(() => {
+        const saved = localStorage.getItem('metro-favorites');
+        if (saved) {
+          setFavorites(JSON.parse(saved));
+        }
+      }, []);
+
+      // Stations par direction
+      const stationsGB = STATIONS.filter(s => s.branch === "commune" || s.branch === "gb");
+      const stationsTechno = STATIONS.filter(s => s.branch === "commune" || s.branch === "techno");
+      const stationsBoulingrin = STATIONS.filter(s => s.branch === "gb" || s.branch === "techno");
+
+      const getStationsForDirection = (direction) => {
+        if (direction === "gb") return stationsGB;
+        if (direction === "techno") return stationsTechno;
+        if (direction === "boulingrin") return stationsBoulingrin;
+        return [];
+      };
+
+      const getDirectionName = (direction) => {
+        if (direction === "gb") return "Georges Braque";
+        if (direction === "techno") return "Technopôle";
+        if (direction === "boulingrin") return "Boulingrin";
+        return "";
+      };
+
+      const handleStationClick = (station, direction = selectedDirection) => {
+        onSelect({
+          ...station,
+          direction: direction,
+          directionName: getDirectionName(direction)
+        });
+      };
+
+      const handleFavoriteClick = (fav) => {
+        const station = STATIONS.find(s => s.id === fav.stationId);
+        if (station) {
+          handleStationClick(station, fav.direction);
         }
       };
 
-      // Stations pour direction Georges Braque (communes + branche GB) - directionId = 0
-      const stationsGB = STATIONS.filter(s => s.branch === "commune" || s.branch === "gb");
-      // Stations pour direction Technopôle (communes + branche Techno) - directionId = 0
-      const stationsTechno = STATIONS.filter(s => s.branch === "commune" || s.branch === "techno");
-      // Stations pour direction Boulingrin (branches uniquement, pas les communes) - directionId = 1
-      const stationsBoulingrin = STATIONS.filter(s => s.branch === "gb" || s.branch === "techno");
-
-      return (
-        <div className="min-h-screen bg-gradient-to-br from-blue-900 via-blue-800 to-blue-900 text-white p-6 flex items-center justify-center">
-          <div className="bg-white/10 backdrop-blur-md rounded-3xl p-8 max-w-md w-full shadow-2xl border border-white/20">
-            <h1 className="text-4xl font-bold mb-6 text-center">🚇 Métro Rouen</h1>
-            <p className="text-blue-200 mb-6 text-center">Choisissez votre station et direction</p>
-            
-            <form onSubmit={handleSubmit}>
-              <select
-                value={selectedValue}
-                onChange={(e) => setSelectedValue(e.target.value)}
-                className="w-full p-4 rounded-xl bg-white/20 border border-white/30 text-white mb-4 text-lg"
-              >
-                <option value="" className="text-gray-800">-- Sélectionnez une station --</option>
-                
-                <optgroup label="🚇 Direction Georges Braque" className="text-gray-800">
-                  {stationsGB.map(station => (
-                    <option key={`${station.id}-gb`} value={`${station.id}|gb`} className="text-gray-800">
-                      {station.name}
-                    </option>
-                  ))}
-                </optgroup>
-                
-                <optgroup label="🚇 Direction Technopôle" className="text-gray-800">
-                  {stationsTechno.map(station => (
-                    <option key={`${station.id}-techno`} value={`${station.id}|techno`} className="text-gray-800">
-                      {station.name}
-                    </option>
-                  ))}
-                </optgroup>
-                
-                <optgroup label="🚇 Direction Boulingrin" className="text-gray-800">
-                  {stationsBoulingrin.map(station => (
-                    <option key={`${station.id}-boulingrin`} value={`${station.id}|boulingrin`} className="text-gray-800">
-                      {station.name}
-                    </option>
-                  ))}
-                </optgroup>
-              </select>
+      // Étape 1 : Choix de la direction (ou favoris)
+      if (!selectedDirection) {
+        return (
+          <div className="min-h-screen bg-gradient-to-br from-blue-900 via-blue-800 to-blue-900 text-white p-4 flex items-center justify-center">
+            <div className="bg-white/10 backdrop-blur-md rounded-3xl p-6 max-w-md w-full shadow-2xl border border-white/20">
+              <h1 className="text-3xl font-bold mb-6 text-center">🚇 Métro Rouen</h1>
               
+              {/* Favoris */}
+              {favorites.length > 0 && (
+                <div className="mb-6">
+                  <p className="text-yellow-400 mb-3 text-center font-semibold">⭐ Favoris</p>
+                  <div className="space-y-2">
+                    {favorites.map((fav, index) => {
+                      const station = STATIONS.find(s => s.id === fav.stationId);
+                      if (!station) return null;
+                      return (
+                        <button
+                          key={index}
+                          onClick={() => handleFavoriteClick(fav)}
+                          className="w-full bg-yellow-400/20 hover:bg-yellow-400/30 border border-yellow-400/50 text-white font-semibold py-3 px-4 rounded-xl transition-all text-left flex items-center justify-between"
+                        >
+                          <span>{station.name}</span>
+                          <span className="text-sm text-yellow-300">→ {getDirectionName(fav.direction)}</span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+              
+              <p className="text-blue-200 mb-4 text-center">Où allez-vous ?</p>
+              
+              <div className="space-y-3">
+                <button
+                  onClick={() => setSelectedDirection("gb")}
+                  className="w-full bg-white/20 hover:bg-white/30 border border-white/30 text-white font-semibold py-4 px-6 rounded-xl transition-all text-lg flex items-center justify-between"
+                >
+                  <span>Georges Braque</span>
+                  <span className="text-2xl">→</span>
+                </button>
+                
+                <button
+                  onClick={() => setSelectedDirection("techno")}
+                  className="w-full bg-white/20 hover:bg-white/30 border border-white/30 text-white font-semibold py-4 px-6 rounded-xl transition-all text-lg flex items-center justify-between"
+                >
+                  <span>Technopôle</span>
+                  <span className="text-2xl">→</span>
+                </button>
+                
+                <button
+                  onClick={() => setSelectedDirection("boulingrin")}
+                  className="w-full bg-white/20 hover:bg-white/30 border border-white/30 text-white font-semibold py-4 px-6 rounded-xl transition-all text-lg flex items-center justify-between"
+                >
+                  <span>Boulingrin</span>
+                  <span className="text-2xl">→</span>
+                </button>
+              </div>
+            </div>
+          </div>
+        );
+      }
+
+      // Étape 2 : Choix de la station
+      const stations = getStationsForDirection(selectedDirection);
+      
+      return (
+        <div className="min-h-screen bg-gradient-to-br from-blue-900 via-blue-800 to-blue-900 text-white p-4">
+          <div className="max-w-md mx-auto">
+            <div className="bg-white/10 backdrop-blur-md rounded-3xl p-6 shadow-2xl border border-white/20">
               <button
-                type="submit"
-                disabled={!selectedValue}
-                className="w-full bg-yellow-400 hover:bg-yellow-500 disabled:bg-gray-600 text-blue-900 font-bold py-4 px-6 rounded-xl transition-all text-lg"
+                onClick={() => setSelectedDirection(null)}
+                className="text-blue-300 hover:text-white mb-4 flex items-center gap-2"
               >
-                Afficher les horaires
+                <span>←</span> Retour
               </button>
-            </form>
+              
+              <h2 className="text-2xl font-bold mb-2 text-center">Direction {getDirectionName(selectedDirection)}</h2>
+              <p className="text-blue-200 mb-4 text-center">Choisissez votre station</p>
+              
+              <div className="space-y-2 max-h-96 overflow-y-auto">
+                {stations.map(station => (
+                  <button
+                    key={station.id}
+                    onClick={() => handleStationClick(station)}
+                    className="w-full bg-white/10 hover:bg-white/20 border border-white/20 text-white py-3 px-4 rounded-xl transition-all text-left"
+                  >
+                    {station.name}
+                  </button>
+                ))}
+              </div>
+            </div>
           </div>
         </div>
       );
@@ -156,6 +219,42 @@
       const [currentTime, setCurrentTime] = useState(new Date());
       const [showSelector, setShowSelector] = useState(false);
       const [config, setConfig] = useState(null);
+      const [isFavorite, setIsFavorite] = useState(false);
+
+      // Vérifier si la station actuelle est en favoris
+      const checkIfFavorite = (stationId, direction) => {
+        const saved = localStorage.getItem('metro-favorites');
+        if (saved) {
+          const favorites = JSON.parse(saved);
+          return favorites.some(f => f.stationId === stationId && f.direction === direction);
+        }
+        return false;
+      };
+
+      // Ajouter/Retirer des favoris
+      const toggleFavorite = () => {
+        const saved = localStorage.getItem('metro-favorites');
+        let favorites = saved ? JSON.parse(saved) : [];
+        
+        const index = favorites.findIndex(f => 
+          f.stationId === config.stationBaseId && f.direction === config.direction
+        );
+        
+        if (index >= 0) {
+          // Retirer
+          favorites.splice(index, 1);
+          setIsFavorite(false);
+        } else {
+          // Ajouter
+          favorites.push({
+            stationId: config.stationBaseId,
+            direction: config.direction
+          });
+          setIsFavorite(true);
+        }
+        
+        localStorage.setItem('metro-favorites', JSON.stringify(favorites));
+      };
 
       useEffect(() => {
         const params = new URLSearchParams(window.location.search);
@@ -226,6 +325,13 @@
         });
         setShowSelector(false);
       };
+
+      // Vérifier si favori quand config change
+      useEffect(() => {
+        if (config) {
+          setIsFavorite(checkIfFavorite(config.stationBaseId, config.direction));
+        }
+      }, [config]);
 
       useEffect(() => {
         const timer = setInterval(() => {
@@ -364,6 +470,13 @@
                   <span>{config.stationName}</span>
                   <span>→</span>
                   <span>{config.directionName}</span>
+                  <button
+                    onClick={toggleFavorite}
+                    className="ml-2 text-2xl hover:scale-110 transition-transform"
+                    title={isFavorite ? "Retirer des favoris" : "Ajouter aux favoris"}
+                  >
+                    {isFavorite ? "⭐" : "☆"}
+                  </button>
                 </div>
                 <button
                   onClick={() => setShowSelector(true)}
