@@ -94,6 +94,10 @@ async function loadGTFS() {
     
     console.log(`   - Après filtrage métro: ${gtfsData.trips.length} trips, ${gtfsData.stopTimes.length} stop_times`);
     
+    // Afficher les headsigns uniques pour debug
+    const uniqueHeadsigns = [...new Set(gtfsData.trips.map(t => t.trip_headsign))];
+    console.log(`   - Destinations (headsigns): ${uniqueHeadsigns.join(', ')}`);
+    
     gtfsData.loaded = true;
     gtfsData.lastUpdate = new Date();
     
@@ -197,9 +201,27 @@ function getStaticSchedule(stopId, direction) {
   
   // Trouver les trips actifs aujourd'hui dans la bonne direction
   const activeTrips = gtfsData.trips.filter(trip => {
+    // Vérifier la direction_id
     const dirMatch = (direction === 'boulingrin' && trip.direction_id === '1') ||
                      (direction !== 'boulingrin' && trip.direction_id === '0');
-    return dirMatch && isServiceActiveToday(trip.service_id);
+    
+    if (!dirMatch) return false;
+    
+    // Pour les directions GB et Techno, filtrer aussi par headsign
+    if (direction === 'gb') {
+      const headsign = (trip.trip_headsign || '').toLowerCase();
+      if (!headsign.includes('georges') && !headsign.includes('braque')) {
+        return false;
+      }
+    } else if (direction === 'techno') {
+      const headsign = (trip.trip_headsign || '').toLowerCase();
+      if (!headsign.includes('techno')) {
+        return false;
+      }
+    }
+    // Pour Boulingrin, pas besoin de filtrer par headsign (tous les dir=1 vont vers Boulingrin)
+    
+    return isServiceActiveToday(trip.service_id);
   });
   
   const activeTripIds = new Set(activeTrips.map(t => t.trip_id));
