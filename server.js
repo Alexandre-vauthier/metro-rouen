@@ -193,33 +193,33 @@ function timeToSeconds(timeStr) {
 }
 
 // Obtenir les prochains passages statiques pour une station
-function getStaticSchedule(stopId, direction) {
+function getStaticSchedule(stopId, direction, excludeTripIds = []) {
   if (!gtfsData.loaded) return [];
   
   const now = new Date();
-  const nowSeconds = now.getHours() * 3600 + now.getMinutes() * 60 + now.getSeconds();
+  const excludeSet = new Set(excludeTripIds);
   
-  // Trouver les trips actifs aujourd'hui dans la bonne direction
+  // Trouver les trips actifs aujourd'hui avec le bon headsign
   const activeTrips = gtfsData.trips.filter(trip => {
-    // Vérifier la direction_id
-    const dirMatch = (direction === 'boulingrin' && trip.direction_id === '1') ||
-                     (direction !== 'boulingrin' && trip.direction_id === '0');
+    // Exclure les trips déjà en temps réel
+    if (excludeSet.has(trip.trip_id)) return false;
     
-    if (!dirMatch) return false;
+    // Filtrer par headsign selon la direction demandée
+    const headsign = (trip.trip_headsign || '').toLowerCase();
     
-    // Pour les directions GB et Techno, filtrer aussi par headsign
     if (direction === 'gb') {
-      const headsign = (trip.trip_headsign || '').toLowerCase();
       if (!headsign.includes('georges') && !headsign.includes('braque')) {
         return false;
       }
     } else if (direction === 'techno') {
-      const headsign = (trip.trip_headsign || '').toLowerCase();
       if (!headsign.includes('techno')) {
         return false;
       }
+    } else if (direction === 'boulingrin') {
+      if (!headsign.includes('boulingrin')) {
+        return false;
+      }
     }
-    // Pour Boulingrin, pas besoin de filtrer par headsign (tous les dir=1 vont vers Boulingrin)
     
     return isServiceActiveToday(trip.service_id);
   });
@@ -287,7 +287,7 @@ app.get('/api/metro', async (req, res) => {
 
 // Route pour les horaires statiques
 app.get('/api/static', (req, res) => {
-  const { stopId, direction } = req.query;
+  const { stopId, direction, excludeTrips } = req.query;
   
   if (!stopId || !direction) {
     return res.status(400).json({ error: 'Paramètres stopId et direction requis' });
@@ -300,7 +300,10 @@ app.get('/api/static', (req, res) => {
     });
   }
   
-  const schedule = getStaticSchedule(stopId, direction);
+  // Parser les tripIds à exclure
+  const excludeTripIds = excludeTrips ? excludeTrips.split(',') : [];
+  
+  const schedule = getStaticSchedule(stopId, direction, excludeTripIds);
   
   res.json({
     schedule,
