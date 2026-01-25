@@ -353,23 +353,34 @@
 
           const data = await response.json();
           let trains = processGTFSData(data);
+          
+          // Récupérer les tripIds des métros temps réel
+          const realtimeTripIds = trains.map(t => t.tripId).filter(Boolean);
 
           // Si moins de 3 métros temps réel, compléter avec les horaires statiques
           if (trains.length < 3) {
             try {
+              // Envoyer les tripIds à exclure
+              const excludeParam = realtimeTripIds.length > 0 
+                ? `&excludeTrips=${encodeURIComponent(realtimeTripIds.join(','))}`
+                : '';
+              
               const staticResponse = await fetch(
-                `/api/static?stopId=${encodeURIComponent(config.stationStopId)}&direction=${config.direction}`
+                `/api/static?stopId=${encodeURIComponent(config.stationStopId)}&direction=${config.direction}${excludeParam}`
               );
               
               if (staticResponse.ok) {
                 const staticData = await staticResponse.json();
                 
                 if (staticData.schedule && staticData.schedule.length > 0) {
-                  // Filtrer les horaires statiques qui ne sont pas déjà dans le temps réel
-                  const realtimeArrivals = new Set(trains.map(t => Math.floor(t.arrival / 60)));
+                  // Trouver l'heure du premier métro temps réel
+                  const firstRealtimeArrival = trains.length > 0 
+                    ? Math.min(...trains.map(t => t.arrival))
+                    : Infinity;
                   
                   const staticTrains = staticData.schedule
-                    .filter(st => !realtimeArrivals.has(Math.floor(st.arrival / 60)))
+                    // Ne pas afficher un horaire théorique AVANT le premier temps réel
+                    .filter(st => st.arrival > firstRealtimeArrival || trains.length === 0)
                     .map(st => ({
                       id: `static-${st.tripId}`,
                       arrival: st.arrival,
@@ -437,6 +448,7 @@
               if (arrivalTime && arrivalTime > now) {
                 upcomingTrains.push({
                   id: entity.id,
+                  tripId: tripUpdate?.trip?.tripId,
                   arrival: arrivalTime,
                   direction: config.directionName,
                   vehicleLabel: vehicleLabel || 'Métro',
